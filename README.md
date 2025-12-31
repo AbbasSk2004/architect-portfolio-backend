@@ -32,7 +32,12 @@ PORT=5000
 NODE_ENV=development
 
 # CORS Configuration
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URLS=https://architecture-portfolio-mu.vercel.app
+
+# Cloudinary Configuration (for file uploads)
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
 
 **Note:** Copy `.env.example` to `.env` and fill in your actual values.
@@ -63,6 +68,13 @@ The server will start on `http://localhost:5000` (or the port specified in `.env
 - `PUT /api/testimonials/:id` - Update a testimonial
 - `DELETE /api/testimonials/:id` - Delete a testimonial
 
+### Career Applications
+- `GET /api/career` - Get all career applications
+- `GET /api/career/:id` - Get a single application by ID
+- `POST /api/career` - Create a new application (with file uploads)
+- `PUT /api/career/:id/status` - Update application status
+- `DELETE /api/career/:id` - Delete an application
+
 ### Testimonial Schema
 
 ```json
@@ -78,20 +90,41 @@ The server will start on `http://localhost:5000` (or the port specified in `.env
 }
 ```
 
+### Career Application Schema
+
+```json
+{
+  "_id": "ObjectId",
+  "fullName": "string (required)",
+  "email": "string (required)",
+  "motivationLetter": "string (required)",
+  "jobTitle": "string (required)",
+  "cvUrl": "string (required, Cloudinary URL)",
+  "portfolioUrl": "string (optional, Cloudinary URL)",
+  "status": "pending | reviewed | accepted | rejected",
+  "createdAt": "Date",
+  "updatedAt": "Date"
+}
+```
+
 ## Project Structure
 
 ```
 backend/
 ├── config/
-│   └── database.js           # MongoDB connection configuration
+│   ├── database.js           # MongoDB connection configuration
+│   └── cloudinary.js         # Cloudinary configuration
 ├── controllers/
-│   └── testimonialsController.js  # Testimonials business logic
+│   ├── testimonialsController.js  # Testimonials business logic
+│   └── careerController.js        # Career applications business logic
 ├── middleware/
 │   ├── errorHandler.js       # Global error handling middleware
 │   ├── validation.js         # Request validation middleware
-│   └── logger.js            # Request logging middleware
+│   ├── logger.js            # Request logging middleware
+│   └── upload.js             # File upload middleware (Cloudinary)
 ├── routes/
-│   └── testimonials.js       # Testimonials API routes
+│   ├── testimonials.js       # Testimonials API routes
+│   └── career.js            # Career applications API routes
 ├── server.js                 # Express server setup
 ├── package.json              # Dependencies
 ├── .env                      # Environment variables (not in git)
@@ -107,7 +140,17 @@ backend/
 
 ## Database
 
-The backend connects to MongoDB Atlas. The database name is `architect_portfolio` and testimonials are stored in the `testimonials` collection.
+The backend connects to MongoDB Atlas. The database name is `architect_portfolio` with the following collections:
+- `testimonials` - Client testimonials
+- `career_applications` - Job applications with file uploads
+
+## File Storage
+
+Files (CVs and Portfolios) are stored on Cloudinary:
+- **Folder**: `architect-portfolio/career`
+- **Resource Type**: `raw` (for PDFs)
+- **Max File Size**: 10MB
+- **Allowed Formats**: PDF only
 
 ## Error Handling
 
@@ -159,7 +202,10 @@ The server uses ES modules (`"type": "module"` in package.json), so all imports 
 Make sure to set these in your deployment platform:
 - `MONGODB_URI` - Required
 - `NODE_ENV` - Set to `production`
-- `FRONTEND_URL` - Your production frontend URL
+- `FRONTEND_URLS` - Your production frontend URLs (comma-separated)
+- `CLOUDINARY_CLOUD_NAME` - Required for file uploads
+- `CLOUDINARY_API_KEY` - Required for file uploads
+- `CLOUDINARY_API_SECRET` - Required for file uploads
 - `PORT` - Usually set automatically by the platform
 
 ## API Response Format

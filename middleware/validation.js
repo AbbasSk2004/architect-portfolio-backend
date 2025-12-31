@@ -125,3 +125,51 @@ export const validateUpdateTestimonial = (req, res, next) => {
   next()
 }
 
+/**
+ * Validate create career application request
+ */
+export const validateCreateApplication = (req, res, next) => {
+  const { fullName, email, motivationLetter, jobTitle } = req.body
+  
+  // Check required fields
+  if (!fullName || !email || !motivationLetter || !jobTitle) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required fields: fullName, email, motivationLetter, and jobTitle are required'
+    })
+  }
+  
+  // Validate fullName
+  if (typeof fullName !== 'string' || fullName.trim().length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: 'Full name must be at least 2 characters long'
+    })
+  }
+  
+  // Validate email format
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid email format'
+    })
+  }
+  
+  // Validate motivation letter
+  if (typeof motivationLetter !== 'string' || motivationLetter.trim().length < 20) {
+    return res.status(400).json({
+      success: false,
+      message: 'Motivation letter must be at least 20 characters long'
+    })
+  }
+  
+  // Validate job title
+  if (typeof jobTitle !== 'string' || jobTitle.trim().length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: 'Job title must be at least 2 characters long'
+    })
+  }
+  
+  next()
+}

@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import testimonialsRoutes from './routes/testimonials.js'
+import careerRoutes from './routes/career.js'
 import { connectToDatabase } from './config/database.js'
 import { requestLogger } from './middleware/logger.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
@@ -63,6 +64,8 @@ app.use(cors({
 // Log allowed origins on startup
 console.log('🌐 Allowed CORS origins:', allowedOrigins)
 
+// Body parsing middleware
+// Note: express.json() only parses JSON requests, multer handles multipart/form-data
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -80,6 +83,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/testimonials', testimonialsRoutes)
+app.use('/api/career', careerRoutes)
 
 // 404 handler (must be after all routes)
 app.use(notFound)
