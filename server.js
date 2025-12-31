@@ -11,13 +11,57 @@ dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 5000
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 
-// Middleware
+// Configure CORS with multiple allowed origins
+function getAllowedOrigins() {
+  const origins = []
+  
+  // Always allow local frontend for development
+  origins.push('http://localhost:3000')
+  
+  // Add frontend URLs from environment variable (comma-separated)
+  if (process.env.FRONTEND_URLS) {
+    const envUrls = process.env.FRONTEND_URLS.split(',').map(url => url.trim())
+    origins.push(...envUrls)
+  } else if (process.env.FRONTEND_URL) {
+    // Support single URL for backward compatibility
+    origins.push(process.env.FRONTEND_URL)
+  }
+  
+  // In production (Render), also allow Vercel frontend
+  if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+    origins.push('https://architecture-portfolio-mu.vercel.app')
+  }
+  
+  // Remove duplicates
+  return [...new Set(origins)]
+}
+
+const allowedOrigins = getAllowedOrigins()
+
+// CORS configuration
 app.use(cors({
-  origin: FRONTEND_URL,
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, etc.) in development
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      return callback(null, true)
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      console.warn(`⚠️  Blocked CORS request from: ${origin}`)
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }))
+
+// Log allowed origins on startup
+console.log('🌐 Allowed CORS origins:', allowedOrigins)
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
@@ -70,7 +114,7 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`)
       console.log(`📡 API endpoints available at http://localhost:${PORT}/api`)
-      console.log(`🌐 Frontend URL: ${FRONTEND_URL}`)
+      console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`)
     })
   } catch (error) {
     console.error('Failed to start server:', error)
