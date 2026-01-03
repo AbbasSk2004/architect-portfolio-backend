@@ -3,6 +3,8 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import testimonialsRoutes from './routes/testimonials.js'
 import careerRoutes from './routes/career.js'
+import inquiriesRoutes from './routes/inquiries.js'
+import stripeRoutes from './routes/stripe.js'
 import { connectToDatabase } from './config/database.js'
 import { requestLogger } from './middleware/logger.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
@@ -64,6 +66,11 @@ app.use(cors({
 // Log allowed origins on startup
 console.log('🌐 Allowed CORS origins:', allowedOrigins)
 
+// Stripe webhook route must be before body parsing middleware
+// (Stripe webhook needs raw body for signature verification)
+import { handleWebhook } from './controllers/stripeController.js'
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), handleWebhook)
+
 // Body parsing middleware
 // Note: express.json() only parses JSON requests, multer handles multipart/form-data
 app.use(express.json())
@@ -84,6 +91,8 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/testimonials', testimonialsRoutes)
 app.use('/api/career', careerRoutes)
+app.use('/api/inquiries', inquiriesRoutes)
+app.use('/api/stripe', stripeRoutes)
 
 // 404 handler (must be after all routes)
 app.use(notFound)
