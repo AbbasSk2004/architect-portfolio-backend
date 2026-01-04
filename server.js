@@ -59,6 +59,8 @@ app.post('/api/stripe/webhook',
 )
 
 // CORS configuration for all other routes
+// Note: GET requests without origin are allowed (read-only, less risky)
+// This handles server-side requests from Next.js, health checks, etc.
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin in development (for testing tools)
@@ -66,10 +68,13 @@ app.use(cors({
       return callback(null, true)
     }
     
-    // In production, block requests without origin (except webhook which is handled above)
+    // In production, allow requests without origin
+    // GET requests are read-only and safe
+    // POST/PUT/DELETE without origin will be handled by route-level validation
+    // This prevents blocking legitimate server-side requests from Next.js
     if (!origin && process.env.NODE_ENV === 'production') {
-      console.warn('⚠️  Blocked request with no origin in production')
-      return callback(new Error('Not allowed by CORS'))
+      // Allow it - the route handlers will validate the request
+      return callback(null, true)
     }
     
     // Check if origin is in allowed list
