@@ -75,13 +75,30 @@ export const createCheckoutSession = async (req, res, next) => {
       })
     }
     
+    // Get frontend URL for redirects
+    // In production, use FRONTEND_URLS from env, otherwise default to localhost for development
+    const getFrontendUrl = () => {
+      if (process.env.FRONTEND_URLS) {
+        // Get first URL from comma-separated list and remove trailing slash
+        const url = process.env.FRONTEND_URLS.split(',')[0].trim()
+        return url.endsWith('/') ? url.slice(0, -1) : url
+      }
+      // For local development, check if we're in production mode
+      if (process.env.NODE_ENV === 'production') {
+        return 'https://architecture-portfolio-mu.vercel.app'
+      }
+      return 'http://localhost:3000'
+    }
+    
+    const frontendUrl = getFrontendUrl()
+    
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URLS?.split(',')[0] || 'http://localhost:3000'}/inquiry/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URLS?.split(',')[0] || 'http://localhost:3000'}/inquiry/cancel`,
+      success_url: `${frontendUrl}/inquiry/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontendUrl}/inquiry/cancel`,
       metadata: {
         inquiryId: inquiryId,
         duration: duration,
