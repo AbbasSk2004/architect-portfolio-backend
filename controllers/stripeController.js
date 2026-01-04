@@ -133,13 +133,43 @@ export const createCheckoutSession = async (req, res, next) => {
 }
 
 /**
- * Get checkout session status
+ * Get checkout session status and automatically update inquiry if payment is paid
  */
 export const getCheckoutSession = async (req, res, next) => {
   try {
     const { sessionId } = req.params
     
     const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const inquiryId = session.metadata?.inquiryId
+    
+    // If payment is paid, automatically update the inquiry in database
+    // This acts as a backup if the webhook failed
+    if (session.payment_status === 'paid' && inquiryId && ObjectId.isValid(inquiryId)) {
+      try {
+        const { db } = await connectToDatabase()
+        const updateResult = await db.collection('inquiries').updateOne(
+          { _id: new ObjectId(inquiryId) },
+          { 
+            $set: { 
+              paymentStatus: 'paid',
+              status: 'paid',
+              paidAt: new Date(),
+              updatedAt: new Date()
+            } 
+          }
+        )
+        
+        console.log('✅ Auto-updated inquiry from session check:', {
+          sessionId: sessionId,
+          inquiryId: inquiryId,
+          matchedCount: updateResult.matchedCount,
+          modifiedCount: updateResult.modifiedCount
+        })
+      } catch (updateError) {
+        console.error('⚠️  Error auto-updating inquiry:', updateError)
+        // Don't fail the request if update fails, just log it
+      }
+    }
     
     res.status(200).json({
       success: true,
@@ -150,6 +180,7 @@ export const getCheckoutSession = async (req, res, next) => {
         customerEmail: session.customer_email,
         amountTotal: session.amount_total,
         currency: session.currency,
+        inquiryId: inquiryId,
       }
     })
   } catch (error) {
