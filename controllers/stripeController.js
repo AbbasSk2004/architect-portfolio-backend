@@ -165,12 +165,16 @@ export const handleWebhook = async (req, res, next) => {
   const sig = req.headers['stripe-signature']
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
   
+  console.log('🔔 Webhook received')
+  console.log('Webhook secret configured:', !!webhookSecret)
+  
   let event
   
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+    console.log('✅ Webhook signature verified. Event type:', event.type)
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message)
+    console.error('❌ Webhook signature verification failed:', err.message)
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
   
@@ -182,9 +186,19 @@ export const handleWebhook = async (req, res, next) => {
       case 'checkout.session.completed':
         const session = event.data.object
         const inquiryId = session.metadata?.inquiryId
+        const paymentStatus = session.payment_status
         
-        if (inquiryId && ObjectId.isValid(inquiryId)) {
-          await db.collection('inquiries').updateOne(
+        console.log('📦 Checkout session completed:', {
+          sessionId: session.id,
+          inquiryId: inquiryId,
+          paymentStatus: paymentStatus,
+          amountTotal: session.amount_total,
+          currency: session.currency
+        })
+        
+        // Only update if payment is actually paid
+        if (paymentStatus === 'paid' && inquiryId && ObjectId.isValid(inquiryId)) {
+          const result = await db.collection('inquiries').updateOne(
             { _id: new ObjectId(inquiryId) },
             { 
               $set: { 
@@ -195,20 +209,144 @@ export const handleWebhook = async (req, res, next) => {
               } 
             }
           )
+          
+          console.log('✅ Inquiry updated:', {
+            inquiryId: inquiryId,
+            matchedCount: result.matchedCount,
+            modifiedCount: result.modifiedCount
+          })
+          
+          if (result.matchedCount === 0) {
+            console.warn('⚠️  Inquiry not found with ID:', inquiryId)
+          }
+        } else {
+          console.warn('⚠️  Payment not completed or invalid inquiry ID:', {
+            paymentStatus: paymentStatus,
+            inquiryId: inquiryId,
+            isValid: inquiryId ? ObjectId.isValid(inquiryId) : false
+          })
         }
         break
       
       case 'payment_intent.succeeded':
-        // Handle successful payment
+        console.log('💳 Payment intent succeeded:', event.data.object.id)
+        // Additional payment confirmation if needed
+        break
+      
+      case 'checkout.session.async_payment_succeeded':
+        // Handle async payment methods (like bank transfers)
+        const asyncSession = event.data.object
+        const asyncInquiryId = asyncSession.metadata?.inquiryId
+        
+        if (asyncInquiryId && ObjectId.isValid(asyncInquiryId)) {
+          await db.collection('inquiries').updateOne(
+            { _id: new ObjectId(asyncInquiryId) },
+            { 
+              $set: { 
+                paymentStatus: 'paid',
+                status: 'paid',
+                paidAt: new Date(),
+                updatedAt: new Date()
+              } 
+            }
+          )
+          console.log('✅ Async payment completed for inquiry:', asyncInquiryId)
+        }
         break
       
       default:
-        console.log(`Unhandled event type ${event.type}`)
+        console.log(`ℹ️  Unhandled event type: ${event.type}`)
     }
     
     res.json({ received: true })
   } catch (error) {
-    console.error('Webhook handler error:', error)
+    console.error('❌ Webhook handler error:', error)
+    next(error)
+  }
+}
+
+/**
+ * Manually verify and update payment status for an inquiry
+ * Useful for debugging or if webhook failed
+ */
+export const verifyPaymentStatus = async (req, res, next) => {
+  try {
+    const { inquiryId } = req.params
+    
+    if (!ObjectId.isValid(inquiryId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid inquiry ID format'
+      })
+    }
+    
+    const { db } = await connectToDatabase()
+    const inquiry = await db.collection('inquiries').findOne({
+      _id: new ObjectId(inquiryId)
+    })
+    
+    if (!inquiry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inquiry not found'
+      })
+    }
+    
+    if (!inquiry.stripeSessionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No Stripe session ID found for this inquiry'
+      })
+    }
+    
+    // Retrieve session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(inquiry.stripeSessionId)
+    
+    console.log('🔍 Verifying payment status:', {
+      inquiryId: inquiryId,
+      sessionId: session.id,
+      paymentStatus: session.payment_status,
+      status: session.status
+    })
+    
+    // Update if payment is completed
+    if (session.payment_status === 'paid' && inquiry.paymentStatus !== 'paid') {
+      await db.collection('inquiries').updateOne(
+        { _id: new ObjectId(inquiryId) },
+        { 
+          $set: { 
+            paymentStatus: 'paid',
+            status: 'paid',
+            paidAt: new Date(),
+            updatedAt: new Date()
+          } 
+        }
+      )
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Payment status updated to paid',
+        data: {
+          inquiryId: inquiryId,
+          paymentStatus: 'paid',
+          sessionId: session.id
+        }
+      })
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Payment status verified',
+      data: {
+        inquiryId: inquiryId,
+        currentPaymentStatus: inquiry.paymentStatus,
+        stripePaymentStatus: session.payment_status,
+        sessionStatus: session.status,
+        needsUpdate: session.payment_status === 'paid' && inquiry.paymentStatus !== 'paid'
+      }
+    })
+  } catch (error) {
+    console.error('Error verifying payment status:', error)
     next(error)
   }
 }
