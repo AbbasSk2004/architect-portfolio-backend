@@ -42,12 +42,34 @@ function getAllowedOrigins() {
 
 const allowedOrigins = getAllowedOrigins()
 
-// CORS configuration
+// Stripe webhook route must be BEFORE CORS middleware
+// (Stripe webhooks don't send Origin header, so they need special handling)
+import { handleWebhook } from './controllers/stripeController.js'
+app.post('/api/stripe/webhook', 
+  // Skip CORS check for webhook - it's server-to-server from Stripe
+  (req, res, next) => {
+    // Allow webhook requests without Origin header
+    res.header('Access-Control-Allow-Origin', '*')
+    res.header('Access-Control-Allow-Methods', 'POST')
+    res.header('Access-Control-Allow-Headers', 'Stripe-Signature, Content-Type')
+    next()
+  },
+  express.raw({ type: 'application/json' }), 
+  handleWebhook
+)
+
+// CORS configuration for all other routes
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, Postman, etc.) in development
+    // Allow requests with no origin in development (for testing tools)
     if (!origin && process.env.NODE_ENV !== 'production') {
       return callback(null, true)
+    }
+    
+    // In production, block requests without origin (except webhook which is handled above)
+    if (!origin && process.env.NODE_ENV === 'production') {
+      console.warn('⚠️  Blocked request with no origin in production')
+      return callback(new Error('Not allowed by CORS'))
     }
     
     // Check if origin is in allowed list
@@ -65,11 +87,6 @@ app.use(cors({
 
 // Log allowed origins on startup
 console.log('🌐 Allowed CORS origins:', allowedOrigins)
-
-// Stripe webhook route must be before body parsing middleware
-// (Stripe webhook needs raw body for signature verification)
-import { handleWebhook } from './controllers/stripeController.js'
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), handleWebhook)
 
 // Body parsing middleware
 // Note: express.json() only parses JSON requests, multer handles multipart/form-data
