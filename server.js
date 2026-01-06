@@ -1,10 +1,13 @@
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import dotenv from 'dotenv'
 import testimonialsRoutes from './routes/testimonials.js'
 import careerRoutes from './routes/career.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import stripeRoutes from './routes/stripe.js'
+import authRoutes from './routes/auth.js'
+import dashboardRoutes from './routes/dashboard.js'
 import { connectToDatabase } from './config/database.js'
 import { requestLogger } from './middleware/logger.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
@@ -97,6 +100,7 @@ console.log('🌐 Allowed CORS origins:', allowedOrigins)
 // Note: express.json() only parses JSON requests, multer handles multipart/form-data
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+app.use(cookieParser())
 
 // Request logging middleware
 app.use(requestLogger)
@@ -115,6 +119,8 @@ app.use('/api/testimonials', testimonialsRoutes)
 app.use('/api/career', careerRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/stripe', stripeRoutes)
+app.use('/api/admin/auth', authRoutes)
+app.use('/api/admin/dashboard', dashboardRoutes)
 
 // 404 handler (must be after all routes)
 app.use(notFound)
