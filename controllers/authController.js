@@ -2,6 +2,34 @@ import { findAdminByEmail, verifyPassword } from '../models/admin.js'
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.js'
 
 /**
+ * Get cookie options based on environment
+ * For cross-origin requests (production), use 'none' with secure
+ * For same-origin requests (development), use 'strict'
+ */
+function getCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production'
+  
+  const options = {
+    httpOnly: true,
+    secure: isProduction, // Must be true for sameSite: 'none'
+    sameSite: isProduction ? 'none' : 'strict', // 'none' for cross-origin, 'strict' for same-origin
+    path: '/', // Explicit path for cookie clearing
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  }
+  
+  // Log cookie settings in production for debugging
+  if (isProduction) {
+    console.log('🍪 Cookie settings:', {
+      secure: options.secure,
+      sameSite: options.sameSite,
+      httpOnly: options.httpOnly
+    })
+  }
+  
+  return options
+}
+
+/**
  * Admin login
  */
 export const login = async (req, res, next) => {
@@ -43,14 +71,10 @@ export const login = async (req, res, next) => {
     const accessToken = generateAccessToken(tokenPayload)
     const refreshToken = generateRefreshToken(tokenPayload)
     
-    // Set httpOnly cookies
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    }
+    // Get cookie options
+    const cookieOptions = getCookieOptions()
     
+    // Set httpOnly cookies
     res.cookie('accessToken', accessToken, {
       ...cookieOptions,
       maxAge: 15 * 60 * 1000 // 15 minutes
@@ -81,9 +105,12 @@ export const login = async (req, res, next) => {
  */
 export const logout = async (req, res, next) => {
   try {
-    // Clear cookies
-    res.clearCookie('accessToken')
-    res.clearCookie('refreshToken')
+    // Get cookie options to ensure proper clearing
+    const cookieOptions = getCookieOptions()
+    
+    // Clear cookies with same options used to set them
+    res.clearCookie('accessToken', cookieOptions)
+    res.clearCookie('refreshToken', cookieOptions)
     
     res.status(200).json({
       success: true,
@@ -120,11 +147,12 @@ export const refreshToken = async (req, res, next) => {
     
     const newAccessToken = generateAccessToken(tokenPayload)
     
+    // Get cookie options
+    const cookieOptions = getCookieOptions()
+    
     // Set new access token cookie
     res.cookie('accessToken', newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 15 * 60 * 1000 // 15 minutes
     })
     
