@@ -35,6 +35,26 @@ export const createCheckoutSession = async (req, res, next) => {
       })
     }
     
+    // Validate email is present and properly formatted (REQUIRED for Stripe automatic emails)
+    if (!inquiry.email || typeof inquiry.email !== 'string' || !inquiry.email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Inquiry email is required for payment processing and receipt delivery'
+      })
+    }
+    
+    // Normalize email (lowercase, trim) for Stripe
+    const customerEmail = inquiry.email.trim().toLowerCase()
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(customerEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format in inquiry. Please provide a valid email address.'
+      })
+    }
+    
     // Calculate price
     const durationPrices = {
       '30': 6499, // €64.99 in cents
@@ -93,19 +113,37 @@ export const createCheckoutSession = async (req, res, next) => {
     const frontendUrl = getFrontendUrl()
     
     // Create checkout session
+    // IMPORTANT: customer_creation: 'always' is REQUIRED for Stripe to automatically send emails
+    // Without it, Stripe may skip customer creation and email automation will not trigger
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
       mode: 'payment',
+      payment_method_types: ['card'],
+      
+      // CRITICAL: Force customer creation to enable automatic email sending
+      customer_creation: 'always',
+      customer_email: customerEmail, // Use normalized email
+      
+      line_items: lineItems,
+      
       success_url: `${frontendUrl}/inquiry/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/inquiry/cancel`,
+      
       metadata: {
         inquiryId: inquiryId,
         duration: duration,
         roadmapReport: roadmapReport ? 'true' : 'false',
       },
-      customer_email: inquiry.email,
     })
+    
+    // Log customer creation for debugging (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ Stripe checkout session created:', {
+        sessionId: session.id,
+        customerEmail: customerEmail,
+        customerId: session.customer || 'Will be created on payment',
+        mode: 'payment'
+      })
+    }
     
     // Update inquiry with session ID
     await db.collection('inquiries').updateOne(
