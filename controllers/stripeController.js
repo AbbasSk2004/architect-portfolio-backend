@@ -123,6 +123,10 @@ export const createCheckoutSession = async (req, res, next) => {
       customer_creation: 'always',
       customer_email: customerEmail, // Use normalized email
       
+      // Billing address collection: 'required' ensures Stripe prompts for billing address
+      // This is important for AVS (Address Verification System) checks and compliance
+      billing_address_collection: 'required',
+      
       line_items: lineItems,
       
       success_url: `${frontendUrl}/inquiry/success?session_id={CHECKOUT_SESSION_ID}`,
