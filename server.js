@@ -8,6 +8,7 @@ import inquiriesRoutes from './routes/inquiries.js'
 import stripeRoutes from './routes/stripe.js'
 import authRoutes from './routes/auth.js'
 import dashboardRoutes from './routes/dashboard.js'
+import adminTestimonialsRoutes from './routes/adminTestimonials.js'
 import { connectToDatabase } from './config/database.js'
 import { requestLogger } from './middleware/logger.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
@@ -121,6 +122,7 @@ app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/stripe', stripeRoutes)
 app.use('/api/admin/auth', authRoutes)
 app.use('/api/admin/dashboard', dashboardRoutes)
+app.use('/api/admin/testimonials', adminTestimonialsRoutes)
 
 // 404 handler (must be after all routes)
 app.use(notFound)

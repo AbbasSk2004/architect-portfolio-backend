@@ -2,13 +2,21 @@ import { connectToDatabase } from '../config/database.js'
 import { ObjectId } from 'mongodb'
 
 /**
- * Get all testimonials
+ * Get all testimonials (PUBLIC - only returns approved testimonials)
+ * Handles migration: testimonials without status field are treated as approved
  */
 export const getAllTestimonials = async (req, res, next) => {
   try {
     const { db } = await connectToDatabase()
+    // Only return approved testimonials for public display
+    // Also include testimonials without status field (for backward compatibility)
     const testimonials = await db.collection('testimonials')
-      .find({})
+      .find({
+        $or: [
+          { status: 'approved' },
+          { status: { $exists: false } } // Legacy testimonials without status
+        ]
+      })
       .sort({ createdAt: -1 }) // Sort by newest first
       .toArray()
     
@@ -101,6 +109,7 @@ export const createTestimonial = async (req, res, next) => {
       email: normalizedEmail,
       projectType: projectType?.trim() || null,
       review: review.trim(),
+      status: 'pending', // Default status - requires admin approval
       createdAt: new Date(),
       updatedAt: new Date()
     }
