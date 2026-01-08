@@ -121,7 +121,9 @@ export const getDashboardStats = async (req, res, next) => {
             firstName: booking.firstName,
             lastName: booking.lastName,
             email: booking.email,
-            amount: booking.consultationDetails?.billingInfo?.amount || null,
+            // Amount is stored in Stripe session, not in billingInfo
+            // Calculate from consultation details if needed, or fetch from Stripe
+            amount: null, // Amount should be retrieved from Stripe session if needed
             paidAt: booking.paidAt || booking.updatedAt,
             createdAt: booking.createdAt
           }))

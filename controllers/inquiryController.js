@@ -218,7 +218,7 @@ export const submitGeneralInquiry = async (req, res, next) => {
 export const updateConsultationDetails = async (req, res, next) => {
   try {
     const { inquiryId } = req.params
-    const { duration, roadmapReport, format, selectedDate, selectedTime, billingInfo } = req.body
+    const { duration, roadmapReport, format, selectedDate, selectedTime } = req.body
     
     if (!ObjectId.isValid(inquiryId)) {
       return res.status(400).json({
@@ -235,8 +235,7 @@ export const updateConsultationDetails = async (req, res, next) => {
         roadmapReport: roadmapReport || false,
         format: format || 'online',
         selectedDate: selectedDate || null,
-        selectedTime: selectedTime || null,
-        billingInfo: billingInfo || null
+        selectedTime: selectedTime || null
       },
       step: 4,
       updatedAt: new Date()

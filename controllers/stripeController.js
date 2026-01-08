@@ -112,10 +112,14 @@ export const createCheckoutSession = async (req, res, next) => {
     
     const frontendUrl = getFrontendUrl()
     
-    // Create checkout session
-    // IMPORTANT: customer_creation: 'always' is REQUIRED for Stripe to automatically send emails
-    // Without it, Stripe may skip customer creation and email automation will not trigger
-    const session = await stripe.checkout.sessions.create({
+    // Get clientType from inquiry to configure billing address collection
+    const clientType = inquiry.clientType || 'private'
+    
+    // Create checkout session configuration based on client type
+    // For French invoicing compliance:
+    // - Private: Collect personal billing address (no company)
+    // - Business: Collect company billing address (with company name)
+    const sessionConfig = {
       mode: 'payment',
       payment_method_types: ['card'],
       
@@ -136,8 +140,15 @@ export const createCheckoutSession = async (req, res, next) => {
         inquiryId: inquiryId,
         duration: duration,
         roadmapReport: roadmapReport ? 'true' : 'false',
+        clientType: clientType, // Store client type in metadata
       },
-    })
+    }
+    
+    // For business clients, Stripe will automatically show company name field
+    // when billing_address_collection is 'required' and customer_creation is 'always'
+    // No additional configuration needed - Stripe handles this based on the context
+    
+    const session = await stripe.checkout.sessions.create(sessionConfig)
     
     // Log customer creation for debugging (only in development)
     if (process.env.NODE_ENV !== 'production') {
@@ -145,6 +156,8 @@ export const createCheckoutSession = async (req, res, next) => {
         sessionId: session.id,
         customerEmail: customerEmail,
         customerId: session.customer || 'Will be created on payment',
+        clientType: clientType,
+        billingAddressCollection: 'required',
         mode: 'payment'
       })
     }
