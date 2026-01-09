@@ -131,6 +131,13 @@ export const createCheckoutSession = async (req, res, next) => {
       // This is important for AVS (Address Verification System) checks and compliance
       billing_address_collection: 'required',
       
+      // Enable tax ID collection so Checkout asks for VAT when supported
+      tax_id_collection: {
+        enabled: true,
+        // Require when clientType is business in supported countries
+        required: clientType === 'business' ? 'if_supported' : 'never'
+      },
+      
       line_items: lineItems,
       
       success_url: `${frontendUrl}/inquiry/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -144,10 +151,6 @@ export const createCheckoutSession = async (req, res, next) => {
       },
     }
     
-    // For business clients, Stripe will automatically show company name field
-    // when billing_address_collection is 'required' and customer_creation is 'always'
-    // No additional configuration needed - Stripe handles this based on the context
-    
     const session = await stripe.checkout.sessions.create(sessionConfig)
     
     // Log customer creation for debugging (only in development)
@@ -156,18 +159,22 @@ export const createCheckoutSession = async (req, res, next) => {
         sessionId: session.id,
         customerEmail: customerEmail,
         customerId: session.customer || 'Will be created on payment',
+        invoiceId: session.invoice || 'Will be created on payment',
         clientType: clientType,
         billingAddressCollection: 'required',
+        taxIdCollection: 'enabled',
         mode: 'payment'
       })
     }
     
-    // Update inquiry with session ID
+    // Store session id, customer id, and invoice id in DB
     await db.collection('inquiries').updateOne(
       { _id: new ObjectId(inquiryId) },
       { 
         $set: { 
           stripeSessionId: session.id,
+          stripeCustomerId: session.customer || null, // might be null until completed
+          stripeInvoiceId: session.invoice || null,
           paymentStatus: 'pending',
           updatedAt: new Date()
         } 
@@ -236,6 +243,9 @@ export const getCheckoutSession = async (req, res, next) => {
         amountTotal: session.amount_total,
         currency: session.currency,
         inquiryId: inquiryId,
+        metadata: session.metadata || {},
+        customer: session.customer,
+        invoice: session.invoice,
       }
     })
   } catch (error) {
@@ -269,60 +279,80 @@ export const handleWebhook = async (req, res, next) => {
     
     // Handle the event
     switch (event.type) {
-      case 'checkout.session.completed':
+      case 'checkout.session.completed': {
+        // SINGLE SOURCE OF TRUTH for Checkout payments
         const session = event.data.object
         const inquiryId = session.metadata?.inquiryId
+        const customerId = session.customer
+        const invoiceId = session.invoice
+        const clientType = session.metadata?.clientType || 'private'
         const paymentStatus = session.payment_status
-        
-        console.log('📦 Checkout session completed:', {
+
+        console.log('📦 Checkout session completed (single source of truth):', {
           sessionId: session.id,
           inquiryId: inquiryId,
           paymentStatus: paymentStatus,
+          clientType: clientType,
+          customerId: customerId,
+          invoiceId: invoiceId,
           amountTotal: session.amount_total,
           currency: session.currency
         })
-        
-        // Only update if payment is actually paid
-        if (paymentStatus === 'paid' && inquiryId && ObjectId.isValid(inquiryId)) {
-          const result = await db.collection('inquiries').updateOne(
-            { _id: new ObjectId(inquiryId) },
-            { 
-              $set: { 
-                paymentStatus: 'paid',
-                status: 'paid',
-                paidAt: new Date(),
-                updatedAt: new Date()
-              } 
+
+        // Only process if we have a valid inquiry ID
+        if (!inquiryId || !ObjectId.isValid(inquiryId)) {
+          console.warn('⚠️  Invalid or missing inquiry ID in session metadata')
+          break
+        }
+
+        // Persist customer & invoice IDs and mark as paid
+        // For business clients, invoice status is 'billing_pending' until billing info is collected
+        // For private clients, invoice can be finalized immediately
+        await db.collection('inquiries').updateOne(
+          { _id: new ObjectId(inquiryId) },
+          {
+            $set: {
+              paymentStatus: paymentStatus === 'paid' ? 'paid' : 'pending',
+              status: paymentStatus === 'paid' ? 'paid' : 'pending',
+              stripeCustomerId: customerId || null,
+              stripeInvoiceId: invoiceId || null,
+              // Invoice status: business clients need billing info before finalization
+              invoiceStatus: paymentStatus === 'paid' && clientType === 'business'
+                ? 'billing_pending'
+                : paymentStatus === 'paid' ? 'finalized' : 'pending',
+              paidAt: paymentStatus === 'paid' ? new Date() : undefined,
+              updatedAt: new Date()
             }
-          )
-          
-          console.log('✅ Inquiry updated:', {
-            inquiryId: inquiryId,
-            matchedCount: result.matchedCount,
-            modifiedCount: result.modifiedCount
-          })
-          
-          if (result.matchedCount === 0) {
-            console.warn('⚠️  Inquiry not found with ID:', inquiryId)
           }
-        } else {
-          console.warn('⚠️  Payment not completed or invalid inquiry ID:', {
-            paymentStatus: paymentStatus,
+        )
+
+        if (paymentStatus === 'paid') {
+          console.log('✅ Payment completed - Inquiry updated:', {
             inquiryId: inquiryId,
-            isValid: inquiryId ? ObjectId.isValid(inquiryId) : false
+            clientType: clientType,
+            invoiceStatus: clientType === 'business' ? 'billing_pending' : 'finalized'
           })
+
+          // For business clients, invoice will be finalized after billing info is collected
+          // This happens via POST /api/billing/business endpoint
         }
         break
+      }
       
       case 'payment_intent.succeeded':
-        console.log('💳 Payment intent succeeded:', event.data.object.id)
-        // Additional payment confirmation if needed
+        // Log only - do NOT use for business logic
+        // checkout.session.completed is the source of truth for Checkout
+        console.log('💳 Payment intent succeeded (logged only):', event.data.object.id)
         break
       
       case 'checkout.session.async_payment_succeeded':
         // Handle async payment methods (like bank transfers)
+        // Use same logic as checkout.session.completed
         const asyncSession = event.data.object
         const asyncInquiryId = asyncSession.metadata?.inquiryId
+        const asyncCustomerId = asyncSession.customer
+        const asyncInvoiceId = asyncSession.invoice
+        const asyncClientType = asyncSession.metadata?.clientType || 'private'
         
         if (asyncInquiryId && ObjectId.isValid(asyncInquiryId)) {
           await db.collection('inquiries').updateOne(
@@ -331,13 +361,40 @@ export const handleWebhook = async (req, res, next) => {
               $set: { 
                 paymentStatus: 'paid',
                 status: 'paid',
+                stripeCustomerId: asyncCustomerId || null,
+                stripeInvoiceId: asyncInvoiceId || null,
+                invoiceStatus: asyncClientType === 'business' ? 'billing_pending' : 'finalized',
                 paidAt: new Date(),
                 updatedAt: new Date()
               } 
             }
           )
-          console.log('✅ Async payment completed for inquiry:', asyncInquiryId)
+          console.log('✅ Async payment completed for inquiry:', {
+            inquiryId: asyncInquiryId,
+            clientType: asyncClientType,
+            invoiceStatus: asyncClientType === 'business' ? 'billing_pending' : 'finalized'
+          })
         }
+        break
+      
+      case 'invoice.finalized':
+        // Log invoice finalization for tracking
+        const finalizedInvoice = event.data.object
+        console.log('📄 Invoice finalized:', {
+          invoiceId: finalizedInvoice.id,
+          customerId: finalizedInvoice.customer,
+          status: finalizedInvoice.status
+        })
+        break
+      
+      case 'invoice.payment_succeeded':
+        // Log invoice payment for tracking
+        const paidInvoice = event.data.object
+        console.log('💰 Invoice payment succeeded:', {
+          invoiceId: paidInvoice.id,
+          customerId: paidInvoice.customer,
+          amount: paidInvoice.amount_paid
+        })
         break
       
       default:

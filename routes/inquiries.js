@@ -6,7 +6,8 @@ import {
   submitGeneralInquiry,
   updateConsultationDetails,
   getInquiryById,
-  getAllInquiries
+  getAllInquiries,
+  submitBillingInfo
 } from '../controllers/inquiryController.js'
 import { validateInquiryIdentity, validateInquiryContext } from '../middleware/validation.js'
 import { uploadInquiryDocuments, uploadInquiryDocumentsToCloudinary, handleUploadError } from '../middleware/upload.js'
@@ -40,6 +41,9 @@ router.put('/:inquiryId/consultation', updateConsultationDetails)
 
 // POST submit general inquiry (Step 4 - General)
 router.post('/:inquiryId/submit', submitGeneralInquiry)
+
+// POST submit billing information (post-payment for business clients)
+router.post('/:inquiryId/billing-info', submitBillingInfo)
 
 export default router
 

@@ -6,6 +6,7 @@ import testimonialsRoutes from './routes/testimonials.js'
 import careerRoutes from './routes/career.js'
 import inquiriesRoutes from './routes/inquiries.js'
 import stripeRoutes from './routes/stripe.js'
+import billingRoutes from './routes/billing.js'
 import authRoutes from './routes/auth.js'
 import dashboardRoutes from './routes/dashboard.js'
 import adminTestimonialsRoutes from './routes/adminTestimonials.js'
@@ -120,6 +121,7 @@ app.use('/api/testimonials', testimonialsRoutes)
 app.use('/api/career', careerRoutes)
 app.use('/api/inquiries', inquiriesRoutes)
 app.use('/api/stripe', stripeRoutes)
+app.use('/api/billing', billingRoutes)
 app.use('/api/admin/auth', authRoutes)
 app.use('/api/admin/dashboard', dashboardRoutes)
 app.use('/api/admin/testimonials', adminTestimonialsRoutes)
