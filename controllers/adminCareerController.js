@@ -65,24 +65,33 @@ export const getAdminApplications = async (req, res, next) => {
     // Get unique job titles for filter dropdown
     // Use aggregation instead of distinct (distinct not supported in MongoDB API Version 1 with strict mode)
     // This is more efficient than fetching all documents
-    const jobTitleAggregation = await collection.aggregate([
-      { $match: { jobTitle: { $exists: true, $ne: null, $ne: '' } } },
-      { $group: { _id: '$jobTitle' } },
-      { $sort: { _id: 1 } }
-    ]).toArray()
-    const jobTitles = jobTitleAggregation.map(item => item._id).filter(Boolean)
+    let jobTitles = []
+    try {
+      const jobTitleAggregation = await collection.aggregate([
+        { $match: { jobTitle: { $exists: true, $ne: null, $ne: '' } } },
+        { $group: { _id: '$jobTitle' } },
+        { $sort: { _id: 1 } }
+      ]).toArray()
+      jobTitles = jobTitleAggregation.map(item => item._id).filter(Boolean).sort()
+    } catch (aggError) {
+      // If aggregation fails, fallback to empty array
+      console.error('Error fetching job titles:', aggError)
+      jobTitles = []
+    }
 
     res.status(200).json({
       success: true,
-      data: applications,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum)
-      },
-      filters: {
-        jobTitles: jobTitles.filter(Boolean).sort()
+      data: {
+        data: applications || [],
+        pagination: {
+          total: total || 0,
+          page: pageNum || 1,
+          limit: limitNum || 25,
+          totalPages: Math.ceil((total || 0) / (limitNum || 25))
+        },
+        filters: {
+          jobTitles: jobTitles || []
+        }
       }
     })
   } catch (error) {
