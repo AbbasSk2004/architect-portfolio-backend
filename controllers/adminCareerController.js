@@ -63,7 +63,14 @@ export const getAdminApplications = async (req, res, next) => {
       .toArray()
 
     // Get unique job titles for filter dropdown
-    const jobTitles = await collection.distinct('jobTitle')
+    // Use aggregation instead of distinct (distinct not supported in MongoDB API Version 1 with strict mode)
+    // This is more efficient than fetching all documents
+    const jobTitleAggregation = await collection.aggregate([
+      { $match: { jobTitle: { $exists: true, $ne: null, $ne: '' } } },
+      { $group: { _id: '$jobTitle' } },
+      { $sort: { _id: 1 } }
+    ]).toArray()
+    const jobTitles = jobTitleAggregation.map(item => item._id).filter(Boolean)
 
     res.status(200).json({
       success: true,
