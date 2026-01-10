@@ -13,6 +13,8 @@ import adminTestimonialsRoutes from './routes/adminTestimonials.js'
 import adminCareerRoutes from './routes/adminCareer.js'
 import adminProjectsRoutes from './routes/adminProjects.js'
 import projectsRoutes from './routes/projects.js'
+import adminBlogsRoutes from './routes/adminBlogs.js'
+import blogsRoutes from './routes/blogs.js'
 import { connectToDatabase } from './config/database.js'
 import { requestLogger } from './middleware/logger.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
@@ -131,6 +133,8 @@ app.use('/api/admin/testimonials', adminTestimonialsRoutes)
 app.use('/api/admin/career', adminCareerRoutes)
 app.use('/api/admin/projects', adminProjectsRoutes)
 app.use('/api/projects', projectsRoutes)
+app.use('/api/admin/blogs', adminBlogsRoutes)
+app.use('/api/blogs', blogsRoutes)
 
 // 404 handler (must be after all routes)
 app.use(notFound)
