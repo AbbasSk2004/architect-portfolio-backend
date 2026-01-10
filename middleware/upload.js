@@ -179,10 +179,10 @@ export const uploadInquiryDocumentsToCloudinary = async (req, res, next) => {
           public_id: publicId,
         }
         
-        // For images, allow format conversion
+        // For images, allow quality optimization
         if (isImage) {
-          uploadOptions.format = 'auto'
           uploadOptions.quality = 'auto'
+          // Don't specify format - Cloudinary will detect it automatically
         }
         
         cloudinary.uploader.upload_stream(
@@ -278,8 +278,8 @@ export const uploadProjectImagesToCloudinary = async (req, res, next) => {
           folder: 'architect-portfolio/projects',
           resource_type: 'image',
           public_id: publicId,
-          format: 'auto',
           quality: 'auto',
+          // Don't specify format - Cloudinary will detect it automatically
         }
         
         cloudinary.uploader.upload_stream(
@@ -310,8 +310,8 @@ export const uploadProjectImagesToCloudinary = async (req, res, next) => {
             folder: 'architect-portfolio/projects',
             resource_type: 'image',
             public_id: publicId,
-            format: 'auto',
             quality: 'auto',
+            // Don't specify format - Cloudinary will detect it automatically
           }
           
           cloudinary.uploader.upload_stream(
@@ -343,8 +343,8 @@ export const uploadProjectImagesToCloudinary = async (req, res, next) => {
             folder: 'architect-portfolio/projects/plans',
             resource_type: 'image',
             public_id: publicId,
-            format: 'auto',
             quality: 'auto',
+            // Don't specify format - Cloudinary will detect it automatically
           }
           
           cloudinary.uploader.upload_stream(
