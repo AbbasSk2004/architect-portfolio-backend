@@ -495,6 +495,64 @@ export const uploadBlogCoverToCloudinary = async (req, res, next) => {
   }
 }
 
+// Multer for news cover image
+const uploadNewsCover = multer({
+  storage: memoryStorage,
+  fileFilter: projectImageFilter, // Reuse same filter
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+    files: 1
+  }
+})
+
+export const uploadNewsCoverMulter = uploadNewsCover.single('coverImage')
+
+// Middleware to upload news cover to Cloudinary
+export const uploadNewsCoverToCloudinary = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      req.uploadedNewsCover = null
+      return next()
+    }
+
+    const uploadPromise = new Promise((resolve, reject) => {
+      const timestamp = Date.now()
+      const originalName = req.file.originalname.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9]/g, '_')
+      const publicId = `news_cover_${timestamp}_${originalName}`
+      
+      const uploadOptions = {
+        folder: 'architect-portfolio/news',
+        resource_type: 'image',
+        public_id: publicId,
+        quality: 'auto',
+      }
+      
+      cloudinary.uploader.upload_stream(
+        uploadOptions,
+        (error, result) => {
+          if (error) {
+            console.error('News cover upload error:', error)
+            reject(error)
+          } else {
+            resolve({ url: result.secure_url, source: 'cloudinary' })
+          }
+        }
+      ).end(req.file.buffer)
+    })
+
+    const result = await uploadPromise
+    req.uploadedNewsCover = result
+    next()
+  } catch (error) {
+    console.error('News cover upload error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload cover image',
+      error: error.message
+    })
+  }
+}
+
 // Error handler for multer errors
 export const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
