@@ -6,9 +6,11 @@ import {
   updateProject,
   deleteProject,
   publishProject,
-  unpublishProject
+  unpublishProject,
+  deleteProjectImage
 } from '../controllers/projectController.js'
 import { authenticateAdmin } from '../middleware/auth.js'
+import { uploadProjectImagesMulter, uploadProjectImagesToCloudinary, handleUploadError } from '../middleware/upload.js'
 
 const router = express.Router()
 
@@ -21,11 +23,26 @@ router.get('/', getAdminProjects)
 // GET single project by ID (admin)
 router.get('/:id', getAdminProjectById)
 
-// POST create project (admin)
-router.post('/', createProject)
+// POST create project (admin) - supports file uploads
+router.post(
+  '/',
+  uploadProjectImagesMulter,
+  handleUploadError,
+  uploadProjectImagesToCloudinary,
+  createProject
+)
 
-// PUT update project (admin)
-router.put('/:id', updateProject)
+// PUT update project (admin) - supports file uploads
+router.put(
+  '/:id',
+  uploadProjectImagesMulter,
+  handleUploadError,
+  uploadProjectImagesToCloudinary,
+  updateProject
+)
+
+// DELETE project image (admin) - deletes from Cloudinary
+router.delete('/:id/image', deleteProjectImage)
 
 // DELETE project (admin)
 router.delete('/:id', deleteProject)
